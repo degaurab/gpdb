@@ -4,31 +4,32 @@ gpcheckperf -- Check the hardware for Greenplum Database
 
 Usage: gpcheckperf <options>
 
-    --version  : print version information
-    -d segdir  : where segdir is a directory on which to test I/O performance.
-                 Multiple -d flags may be specified for multiple directories
-                 on each host. These will typically be your Greenplum primary
-                 (and/or mirror) data directories.
-                 e.g. -d /dbfast1 -d /dbfast2
-    -?         : print this help text
-    -v         : enable verbose
-    -V         : enable very verbose
-    -D         : print per host disk stats on disk read/write tests
-    -r flags   : where flags specifies the tests to run [default=dsn].
-                 Supported test flags are:
-                       d: runs only disk tests
-                       s: runs only stream benchmark
-                       n: runs only netperf tests (serial)
-                       N: runs only netperf tests (parallel)
-                       M: runs only netperf tests (full matrix)
-    -B size    : where size specifies the block size for disk performance tests
-                 [default=32KB] e.g. 1KB, 4MB
-    -S size    : where size specifies the file size for disk performance tests
-                 [default=2X Memory] e.g. 500MB, 16GB
-    -h host    : the host to connect to (multiple -h is okay)
-    -f file    : a file listing all hosts to connect to
-    --duration : how long to run network test (default 5 seconds)
-    --netperf  : use netperf instead of gpnetbenchServer/gpnetbenchClient
+    --version    : print version information
+    -d segdir    : where segdir is a directory on which to test I/O performance.
+                   Multiple -d flags may be specified for multiple directories
+                   on each host. These will typically be your Greenplum primary
+                   (and/or mirror) data directories.
+                   e.g. -d /dbfast1 -d /dbfast2
+    -?           : print this help text
+    -v           : enable verbose
+    -V           : enable very verbose
+    -D           : print per host disk stats on disk read/write tests
+    -r flags     : where flags specifies the tests to run [default=dsn].
+                   Supported test flags are:
+                         d: runs only disk tests
+                         s: runs only stream benchmark
+                         n: runs only netperf tests (serial)
+                         N: runs only netperf tests (parallel)
+                         M: runs only netperf tests (full matrix)
+    -B size      : where size specifies the block size for disk performance tests
+                   [default=32KB] e.g. 1KB, 4MB
+    -S size      : where size specifies the file size for disk performance tests
+                   [default=2X Memory] e.g. 500MB, 16GB
+    -h host      : the host to connect to (multiple -h is okay)
+    -f file      : a file listing all hosts to connect to
+    --duration   : how long to run network test (default 5 seconds)
+    --netperf    : use netperf instead of gpnetbenchServer/gpnetbenchClient
+    --direct-io  : use direct I/O for data
 """
 
 import datetime
@@ -68,7 +69,8 @@ class Global():
     opt = {'-d': [], '-D': False, '-v': False, '-V': False, '-r': '',
            '-B': 1024 * 32, '-S': 0, '-h': [], '-f': None,
            '--duration': 15, '--net': None, '--netserver': 'gpnetbenchServer',
-           '--netclient': 'gpnetbenchClient'}
+           '--netclient': 'gpnetbenchClient',
+           '--direct-io': None}
 
 
 GV = Global()
@@ -202,7 +204,7 @@ def print_version():
 
 def parseCommandLine():
     try:
-        (options, args) = getopt.getopt(sys.argv[1:], '?vVDd:r:B:S:p:h:f:', ['duration=', 'version', 'netperf'])
+        (options, args) = getopt.getopt(sys.argv[1:], '?vVDd:r:B:S:p:h:f:', ['duration=', 'version', 'netperf', 'direct-io'])
     except Exception as e:
         usage('Error: ' + str(e))
         exit(1)
@@ -225,6 +227,8 @@ def parseCommandLine():
         elif switch == '--netperf':
             GV.opt['--netserver'] = 'netserver'
             GV.opt['--netclient'] = 'netperf'
+        elif switch == '--direct-io':
+            GV.opt[switch] = True
 
     # run default tests (if not specified)
     if GV.opt['-r'] == '':
@@ -452,6 +456,8 @@ def runDiskWriteTest(multidd):
         cmd = cmd + (' -B %d' % GV.opt['-B'])
     if GV.opt['-S']:
         cmd = cmd + (' -S %d' % GV.opt['-S'])
+    if GV.opt['--direct-io']:
+        cmd = cmd + (' -D write')
     (ok, out) = gpssh(cmd)
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
@@ -471,6 +477,8 @@ def runDiskReadTest(multidd):
         cmd = cmd + (' -B %d' % GV.opt['-B'])
     if GV.opt['-S']:
         cmd = cmd + (' -S %d' % GV.opt['-S'])
+    if GV.opt['--direct-io']:
+        cmd = cmd + (' -D read')
     (ok, out) = gpssh(cmd)
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
